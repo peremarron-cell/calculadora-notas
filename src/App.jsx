@@ -840,16 +840,16 @@ function CalendarView({quarters,passGrade}){
         </button>
       </div>
 
-      {/* Grid */}
-      <div style={{padding:"0 12px"}}>
+      {/* Grid — width fijo para evitar que el panel inferior lo encoja */}
+      <div style={{padding:"0 12px",width:"100%",boxSizing:"border-box"}}>
         {/* Cabecera días */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:4}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",marginBottom:4}}>
           {WDAYS.map(d=>(
             <div key={d} style={{textAlign:"center",fontSize:11,fontWeight:600,color:"var(--tx2)",padding:"4px 0",letterSpacing:"0.05em"}}>{d}</div>
           ))}
         </div>
         {/* Celdas */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:2}}>
           {Array.from({length:firstDow}).map((_,i)=><div key={`e${i}`}/>)}
           {Array.from({length:daysInMonth}).map((_,i)=>{
             const d=i+1;
