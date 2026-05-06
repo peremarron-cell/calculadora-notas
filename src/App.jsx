@@ -767,53 +767,196 @@ function HomeView({quarters,onOpenQuarter,onAddQuarter,passGrade}){
   );
 }
 
-/* ══════════════════ CALENDARIO ══════════════════ */
+/* ══════════════════ CALENDARIO VISUAL ══════════════════ */
+const MONTHS=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const WDAYS=["L","M","X","J","V","S","D"];
+const TYPE_COLOR={Examen:P.red,Parcial:P.coral,Final:P.red,Práctica:P.teal,Entrega:P.amber,Trabajo:P.blue,Presentación:P.purple,Otro:P.gray};
+
 function CalendarView({quarters,passGrade}){
-  const events=useMemo(()=>{
-    const evs=[];
+  const now=new Date();
+  const [viewYear,setViewYear]=useState(now.getFullYear());
+  const [viewMonth,setViewMonth]=useState(now.getMonth());
+  const [selectedDay,setSelectedDay]=useState(null);
+
+  // Construir mapa de eventos por fecha
+  const eventsByDate=useMemo(()=>{
+    const map={};
     quarters.forEach(q=>q.subjects.forEach(s=>s.evals.forEach(e=>{
-      if(e.date){const d=daysUntil(e.date);evs.push({qName:q.name,subName:s.name,subColor:getSC(s.colorId).main,evalName:e.name,type:e.type||"Examen",pct:e.pct,grade:e.grade,date:e.date,days:d});}
+      if(e.date){
+        if(!map[e.date]) map[e.date]=[];
+        map[e.date].push({
+          qName:q.name,subName:s.name,subColor:getSC(s.colorId).main,
+          evalName:e.name,type:e.type||"Examen",pct:e.pct,
+          grade:e.grade,days:daysUntil(e.date),
+          typeColor:TYPE_COLOR[e.type||"Examen"]||P.gray,
+        });
+      }
     })));
-    return evs.sort((a,b)=>new Date(a.date)-new Date(b.date));
+    return map;
   },[quarters]);
-  const upcoming=events.filter(e=>e.days!==null&&e.days>=0);
-  const past=events.filter(e=>e.days!==null&&e.days<0);
-  function Card({ev}){
-    const uc=urgencyColor(ev.days);
-    return(
-      <div style={{...T.card,borderLeft:`4px solid ${uc}`,padding:"12px 14px",marginBottom:8}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontWeight:700,fontSize:13,color:ev.subColor,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.subName}</div>
-            <div style={{fontSize:13,fontWeight:500}}>{ev.evalName}</div>
-            <div style={{fontSize:12,color:"var(--tx2)",marginTop:2}}>{ev.qName} · {ev.type} · {ev.pct}%</div>
-          </div>
-          <div style={{textAlign:"right",flexShrink:0}}>
-            {ev.days===0?<div style={{fontSize:13,fontWeight:700,color:P.red}}>¡Hoy!</div>
-            :ev.days>0?<div style={{fontSize:13,fontWeight:700,color:uc}}>en {ev.days}d</div>
-            :<div style={{fontSize:12,color:"var(--tx2)"}}>hace {Math.abs(ev.days)}d</div>}
-            <div style={{fontSize:11,color:"var(--tx2)",marginTop:2}}>{ev.date}</div>
-            <div style={{marginTop:4}}>{ev.grade!==""?<span style={T.tag(gradeColor(parseFloat(ev.grade)))}>{parseFloat(ev.grade).toFixed(1)}</span>:<span style={T.tag(P.gray)}>Pendiente</span>}</div>
-          </div>
+
+  // Días del mes
+  const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();
+  const firstDow=(new Date(viewYear,viewMonth,1).getDay()+6)%7; // 0=Mon
+  const todayStr=today();
+
+  function prevMonth(){
+    if(viewMonth===0){setViewMonth(11);setViewYear(y=>y-1);}
+    else setViewMonth(m=>m-1);
+    setSelectedDay(null);
+  }
+  function nextMonth(){
+    if(viewMonth===11){setViewMonth(0);setViewYear(y=>y+1);}
+    else setViewMonth(m=>m+1);
+    setSelectedDay(null);
+  }
+  function padZ(n){return String(n).padStart(2,"0");}
+  function dateStr(d){return `${viewYear}-${padZ(viewMonth+1)}-${padZ(d)}`;}
+
+  const selectedEvents=selectedDay?eventsByDate[dateStr(selectedDay)]||[]:[];
+
+  // Total events this month for header
+  const monthEvents=Object.entries(eventsByDate).filter(([d])=>d.startsWith(`${viewYear}-${padZ(viewMonth+1)}`));
+  const totalMonth=monthEvents.reduce((s,[,evs])=>s+evs.length,0);
+
+  return(
+    <div style={{...T.page,overflowX:"hidden"}}>
+      {/* Header */}
+      <div style={{padding:"16px 18px 8px"}}>
+        <h1 style={{fontSize:20,fontWeight:700}}>Calendario</h1>
+        <div style={{fontSize:13,color:"var(--tx2)",marginTop:2}}>
+          {totalMonth>0?`${totalMonth} evento${totalMonth!==1?"s":""} este mes`:"Sin eventos este mes"}
         </div>
       </div>
-    );
-  }
-  return(
-    <div style={T.page}>
-      <div style={{padding:"16px 18px 8px"}}><h1 style={{fontSize:20,fontWeight:700}}>Calendario</h1><div style={{fontSize:13,color:"var(--tx2)",marginTop:2}}>Exámenes y entregas</div></div>
-      {events.length===0?(
-        <div style={{textAlign:"center",padding:"60px 20px"}}>
-          <div style={{fontSize:40,marginBottom:12}}>📅</div>
-          <div style={{fontWeight:700,marginBottom:6}}>Sin fechas asignadas</div>
-          <div style={{fontSize:13,color:"var(--tx2)"}}>Añade fechas a las evaluaciones desde cada asignatura</div>
+
+      {/* Nav mes */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 18px 12px"}}>
+        <button onClick={prevMonth} style={{background:"var(--bg2)",border:"none",borderRadius:"var(--radius-sm)",width:36,height:36,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Icon name="back" size={18} color="var(--tx1)"/>
+        </button>
+        <span style={{fontSize:17,fontWeight:700,letterSpacing:"-0.2px"}}>{MONTHS[viewMonth]} {viewYear}</span>
+        <button onClick={nextMonth} style={{background:"var(--bg2)",border:"none",borderRadius:"var(--radius-sm)",width:36,height:36,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Icon name="chevron" size={18} color="var(--tx1)"/>
+        </button>
+      </div>
+
+      {/* Grid */}
+      <div style={{padding:"0 12px"}}>
+        {/* Cabecera días */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:4}}>
+          {WDAYS.map(d=>(
+            <div key={d} style={{textAlign:"center",fontSize:11,fontWeight:600,color:"var(--tx2)",padding:"4px 0",letterSpacing:"0.05em"}}>{d}</div>
+          ))}
         </div>
-      ):(
-        <>
-          {upcoming.length>0&&<><div style={T.sec}>Próximos ({upcoming.length})</div><div style={{padding:"0 18px"}}>{upcoming.map((ev,i)=><Card key={i} ev={ev}/>)}</div></>}
-          {past.length>0&&<><div style={T.sec}>Pasados ({past.length})</div><div style={{padding:"0 18px"}}>{past.map((ev,i)=><Card key={i} ev={ev}/>)}</div></>}
-        </>
+        {/* Celdas */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+          {Array.from({length:firstDow}).map((_,i)=><div key={`e${i}`}/>)}
+          {Array.from({length:daysInMonth}).map((_,i)=>{
+            const d=i+1;
+            const ds=dateStr(d);
+            const evs=eventsByDate[ds]||[];
+            const isToday=ds===todayStr;
+            const isSel=selectedDay===d;
+            const isPast=new Date(ds)<new Date(todayStr);
+            const dots=evs.slice(0,3);
+            return(
+              <button key={d} onClick={()=>setSelectedDay(isSel?null:d)}
+                style={{background:isSel?P.purple:isToday?P.purple+"18":"transparent",border:isToday&&!isSel?`1.5px solid ${P.purple}`:"1.5px solid transparent",borderRadius:10,padding:"6px 2px 5px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,minHeight:44,position:"relative",transition:"background .12s"}}>
+                <span style={{fontSize:14,fontWeight:isToday||isSel?700:400,color:isSel?"#fff":isToday?P.purple:isPast?"var(--tx2)":"var(--tx1)",lineHeight:1}}>{d}</span>
+                <div style={{display:"flex",gap:2,justifyContent:"center",height:6}}>
+                  {dots.map((ev,j)=>(
+                    <div key={j} style={{width:5,height:5,borderRadius:"50%",background:isSel?"rgba(255,255,255,0.8)":ev.typeColor}}/>
+                  ))}
+                  {evs.length>3&&<div style={{width:5,height:5,borderRadius:"50%",background:"var(--tx2)",opacity:0.5}}/>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Panel del día seleccionado */}
+      {selectedDay&&(
+        <div style={{margin:"16px 18px 0"}}>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--tx2)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>
+            {WDAYS[(new Date(viewYear,viewMonth,selectedDay).getDay()+6)%7]} · {selectedDay} {MONTHS[viewMonth]}
+          </div>
+          {selectedEvents.length===0?(
+            <div style={{...T.card,textAlign:"center",padding:"24px 16px",color:"var(--tx2)",fontSize:14}}>
+              Sin eventos este día
+            </div>
+          ):(
+            selectedEvents.map((ev,i)=>{
+              const uc=urgencyColor(ev.days);
+              return(
+                <div key={i} style={{...T.card,padding:"13px 14px",marginBottom:8,borderLeft:`3px solid ${ev.typeColor}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:ev.subColor,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.subName}</div>
+                      <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>{ev.evalName}</div>
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                        <span style={T.tag(ev.typeColor)}>{ev.type}</span>
+                        <span style={T.tag(P.gray)}>{ev.pct}%</span>
+                        {ev.grade!==""&&<span style={T.tag(gradeColor(parseFloat(ev.grade)))}>{parseFloat(ev.grade).toFixed(1)}</span>}
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      {ev.days===0?<div style={{fontSize:13,fontWeight:700,color:P.red}}>¡Hoy!</div>
+                      :ev.days>0?<div style={{fontSize:13,fontWeight:700,color:uc}}>en {ev.days}d</div>
+                      :<div style={{fontSize:12,color:"var(--tx2)"}}>hace {Math.abs(ev.days)}d</div>}
+                      {ev.grade===""&&ev.days>0&&<div style={{fontSize:11,color:"var(--tx2)",marginTop:3}}>Pendiente</div>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       )}
+
+      {/* Lista próximos eventos si no hay día seleccionado */}
+      {!selectedDay&&(()=>{
+        const upcoming=Object.entries(eventsByDate)
+          .flatMap(([date,evs])=>evs.map(ev=>({...ev,date})))
+          .filter(ev=>ev.days!==null&&ev.days>=0)
+          .sort((a,b)=>a.days-b.days)
+          .slice(0,5);
+        if(upcoming.length===0) return(
+          <div style={{textAlign:"center",padding:"40px 20px"}}>
+            <div style={{fontSize:40,marginBottom:10}}>📅</div>
+            <div style={{fontWeight:700,marginBottom:6}}>Sin eventos próximos</div>
+            <div style={{fontSize:13,color:"var(--tx2)"}}>Añade fechas en las evaluaciones de cada asignatura</div>
+          </div>
+        );
+        return(
+          <>
+            <div style={T.sec}>Próximos eventos</div>
+            <div style={{padding:"0 18px"}}>
+              {upcoming.map((ev,i)=>(
+                <div key={i} style={{...T.card,display:"flex",alignItems:"center",gap:12,padding:"12px 14px",marginBottom:8,cursor:"pointer"}}
+                  onClick={()=>{
+                    const evDate=new Date(ev.date);
+                    setViewYear(evDate.getFullYear());
+                    setViewMonth(evDate.getMonth());
+                    setSelectedDay(evDate.getDate());
+                  }}>
+                  <div style={{width:40,height:40,borderRadius:10,background:ev.typeColor+"18",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <div style={{fontSize:9,fontWeight:700,color:ev.typeColor,textTransform:"uppercase",letterSpacing:"0.05em"}}>{MONTHS[new Date(ev.date).getMonth()].slice(0,3)}</div>
+                    <div style={{fontSize:16,fontWeight:700,color:ev.typeColor,lineHeight:1}}>{new Date(ev.date).getDate()}</div>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.subName}</div>
+                    <div style={{fontSize:12,color:"var(--tx2)",marginTop:2}}>{ev.evalName} · {ev.type}</div>
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0}}>
+                    <div style={{fontSize:14,fontWeight:700,color:urgencyColor(ev.days)}}>{ev.days===0?"Hoy":`${ev.days}d`}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
@@ -877,7 +1020,9 @@ function StatsView({quarters,settings,passGrade}){
 function PlanIAView({quarters,settings,passGrade,onReset}){
   const [confirmReset,setConfirmReset]=useState(false);
   const [pdfSel,setPdfSel]=useState({});
-  const [section,setSection]=useState("ia"); // ia | summary | backup
+  const [section,setSection]=useState("ia");
+  // Fix overflow: contenedor con overflow hidden
+  const wrapStyle={width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box"};
 
   const allSubs=quarters.flatMap(q=>q.subjects);
   const{total:totalCr,approved:approvedCr}=creditsInfo(allSubs,passGrade);
@@ -981,105 +1126,125 @@ Resume al inicio la estrategia general, señala los riesgos principales y, si de
   }
 
   return(
-    <div style={T.page}>
+    <div style={{...T.page,...wrapStyle}}>
       {confirmReset&&<ConfirmDialog message="¿Resetear TODOS los datos? Esta acción no se puede deshacer." onConfirm={onReset} onCancel={()=>setConfirmReset(false)}/>}
-      <div style={{padding:"16px 18px 8px"}}><h1 style={{fontSize:20,fontWeight:700}}>Plan IA</h1><div style={{fontSize:13,color:"var(--tx2)",marginTop:2}}>Exportar y gestionar datos</div></div>
 
-      {/* Tabs */}
-      <div style={{display:"flex",gap:0,padding:"8px 18px 0",marginBottom:4}}>
-        {[{id:"ia",label:"PDF para IA"},{id:"summary",label:"Resumen PDF"},{id:"backup",label:"Backup"}].map((t,i,arr)=>(
-          <button key={t.id} onClick={()=>setSection(t.id)}
-            style={{flex:1,background:section===t.id?"var(--tx1)":"var(--bg2)",color:section===t.id?"var(--bg1)":"var(--tx2)",border:"0.5px solid var(--bd2)",borderRadius:i===0?"var(--radius-sm) 0 0 var(--radius-sm)":i===arr.length-1?"0 var(--radius-sm) var(--radius-sm) 0":"0",padding:"9px 6px",fontSize:13,cursor:"pointer",fontWeight:section===t.id?700:400,transition:"background .15s"}}>
-            {t.label}
-          </button>
-        ))}
+      <div style={{padding:"16px 18px 8px"}}>
+        <h1 style={{fontSize:20,fontWeight:700}}>Plan IA</h1>
+        <div style={{fontSize:13,color:"var(--tx2)",marginTop:2}}>Exportar y gestionar datos</div>
+      </div>
+
+      {/* Tabs — scroll horizontal propio, no desborda */}
+      <div style={{padding:"8px 18px 0",marginBottom:4}}>
+        <div style={{display:"flex",gap:0,width:"100%"}}>
+          {[{id:"ia",label:"PDF para IA"},{id:"summary",label:"Resumen"},{id:"backup",label:"Backup"}].map((t,i,arr)=>(
+            <button key={t.id} onClick={()=>setSection(t.id)}
+              style={{flex:1,minWidth:0,background:section===t.id?"var(--tx1)":"var(--bg2)",color:section===t.id?"var(--bg1)":"var(--tx2)",border:"0.5px solid var(--bd2)",
+                borderRadius:i===0?"var(--radius-sm) 0 0 var(--radius-sm)":i===arr.length-1?"0 var(--radius-sm) var(--radius-sm) 0":"0",
+                padding:"9px 4px",fontSize:13,cursor:"pointer",fontWeight:section===t.id?700:400,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* PDF IA */}
       {section==="ia"&&(
-        <div style={{padding:"8px 18px"}}>
+        <div style={{padding:"8px 18px 0"}}>
           <div style={{...T.card,background:P.purple+"12",border:`0.5px solid ${P.purple}30`,marginBottom:12}}>
             <div style={{fontWeight:700,fontSize:15,marginBottom:6,color:P.purple}}>🤖 Crear plan de estudio con IA</div>
             <div style={{fontSize:13,color:"var(--tx2)",lineHeight:1.6}}>
-              Genera un documento optimizado para adjuntar a <strong>ChatGPT o Claude</strong>. La IA recibirá tus notas, riesgo, fechas de exámenes y evaluaciones pendientes, y creará un plan de estudio personalizado.
+              Genera un documento optimizado para <strong>ChatGPT o Claude</strong>. Incluirá notas, riesgo, fechas y evaluaciones pendientes.
             </div>
-            <div style={{marginTop:12,display:"flex",flexWrap:"wrap",gap:6}}>
-              {["📊 Notas actuales","⚠️ Nivel de riesgo","📅 Fechas reales","⏱ Días restantes","🎯 Evaluaciones pendientes"].map(t=>(
-                <span key={t} style={{fontSize:12,background:"var(--bg1)",border:"0.5px solid var(--bd)",borderRadius:20,padding:"4px 10px",color:"var(--tx2)"}}>{t}</span>
+            <div style={{marginTop:10,display:"flex",flexWrap:"wrap",gap:5}}>
+              {["📊 Notas","⚠️ Riesgo","📅 Fechas","⏱ Días","🎯 Pendientes"].map(tag=>(
+                <span key={tag} style={{fontSize:12,background:"var(--bg1)",border:"0.5px solid var(--bd)",borderRadius:20,padding:"3px 9px",color:"var(--tx2)",whiteSpace:"nowrap"}}>{tag}</span>
               ))}
             </div>
           </div>
 
-          <div style={{fontSize:12,color:"var(--tx2)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8,marginTop:16}}>Selecciona asignaturas</div>
+          <div style={{fontSize:11,color:"var(--tx2)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8,marginTop:14}}>Selecciona asignaturas</div>
+
+          {validForIA.length===0&&(
+            <div style={{...T.card,textAlign:"center",padding:"28px 16px",color:"var(--tx2)",fontSize:14}}>
+              Añade fechas a las evaluaciones para poder seleccionarlas
+            </div>
+          )}
 
           {validForIA.map(item=>{
             const{sub,qName,minDays,valid}=item;
             const sel=pdfSel[sub.id]||false;
             return(
               <div key={sub.id} onClick={()=>valid&&toggleSel(sub.id)}
-                style={{...T.card,display:"flex",alignItems:"center",gap:12,padding:"12px 14px",marginBottom:8,opacity:valid?1:0.4,cursor:valid?"pointer":"not-allowed",border:`0.5px solid ${sel?P.purple:valid?"var(--bd)":"var(--bd)"}`,background:sel?P.purple+"08":"var(--bg1)"}}>
-                <div style={{width:22,height:22,borderRadius:6,border:`2px solid ${sel?P.purple:"var(--bd2)"}`,background:sel?P.purple:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
+                style={{background:"var(--bg1)",border:`0.5px solid ${sel?P.purple:"var(--bd)"}`,borderRadius:"var(--radius)",padding:"12px 14px",marginBottom:8,
+                  display:"flex",alignItems:"center",gap:10,opacity:valid?1:0.4,cursor:valid?"pointer":"not-allowed",
+                  background:sel?P.purple+"0a":"var(--bg1)"}}>
+                <div style={{width:22,height:22,borderRadius:6,border:`2px solid ${sel?P.purple:"var(--bd2)"}`,
+                  background:sel?P.purple:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                   {sel&&<span style={{color:"#fff",fontSize:13,lineHeight:1}}>✓</span>}
                 </div>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sub.name}</div>
                   <div style={{fontSize:11,color:"var(--tx2)",marginTop:2}}>{qName}</div>
                 </div>
-                <div style={{textAlign:"right",flexShrink:0}}>
-                  {valid?<span style={T.tag(urgencyColor(minDays))}>en {minDays}d</span>
-                  :<span style={T.tag(P.gray)}>sin fechas</span>}
+                <div style={{flexShrink:0}}>
+                  {valid
+                    ?<span style={T.tag(urgencyColor(minDays))}>{minDays}d</span>
+                    :<span style={T.tag(P.gray)}>sin fechas</span>}
                 </div>
               </div>
             );
           })}
 
-          {validForIA.length===0&&(
-            <div style={{textAlign:"center",padding:"32px 20px",color:"var(--tx2)",fontSize:14}}>
-              Añade fechas a las evaluaciones para poder seleccionarlas
-            </div>
-          )}
-
-          <button style={{...T.btnP(P.purple),borderRadius:"var(--radius)",fontSize:15,padding:"14px",marginTop:8}}
+          <button style={{...T.btnP(P.purple),borderRadius:"var(--radius)",fontSize:15,padding:"14px",marginTop:8,marginBottom:4}}
             onClick={printIA}>
             🤖 Generar PDF para IA
           </button>
         </div>
       )}
 
-      {/* Resumen PDF */}
+      {/* Resumen */}
       {section==="summary"&&(
-        <div style={{padding:"8px 18px"}}>
-          <div style={{...T.card,marginBottom:12}}>
-            <div style={{fontWeight:700,fontSize:15,marginBottom:8}}>📄 Resumen académico completo</div>
-            <div style={{fontSize:13,color:"var(--tx2)",lineHeight:1.6,marginBottom:16}}>Genera un documento imprimible con todos tus cuatrimestres, asignaturas, notas y evaluaciones.</div>
-            <div style={{background:"var(--bg2)",borderRadius:"var(--radius-sm)",padding:"12px 14px",marginBottom:16}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                {[{l:"Estudiante",v:settings.studentName||"—"},{l:"Media de carrera",v:careerAvg!==null?careerAvg.toFixed(2):"—"},{l:"Créditos",v:`${approvedCr}/${settings.totalCredits||240}`},{l:"Cuatrimestres",v:quarters.length}].map(r=>(
-                  <div key={r.l}><div style={{fontSize:11,color:"var(--tx2)",fontWeight:500}}>{r.l}</div><div style={{fontSize:13,fontWeight:600,marginTop:1}}>{r.v}</div></div>
+        <div style={{padding:"8px 18px 0"}}>
+          <div style={T.card}>
+            <div style={{fontWeight:700,fontSize:15,marginBottom:8}}>📄 Resumen académico</div>
+            <div style={{fontSize:13,color:"var(--tx2)",lineHeight:1.6,marginBottom:14}}>Documento imprimible con todos tus cuatrimestres, asignaturas y notas.</div>
+            <div style={{background:"var(--bg2)",borderRadius:"var(--radius-sm)",padding:"12px",marginBottom:14}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {[
+                  {l:"Estudiante",v:settings.studentName||"—"},
+                  {l:"Media",v:careerAvg!==null?careerAvg.toFixed(2):"—"},
+                  {l:"Créditos",v:`${approvedCr}/${settings.totalCredits||240}`},
+                  {l:"Cuatrimestres",v:quarters.length},
+                ].map(r=>(
+                  <div key={r.l}>
+                    <div style={{fontSize:11,color:"var(--tx2)",fontWeight:500}}>{r.l}</div>
+                    <div style={{fontSize:13,fontWeight:700,marginTop:2}}>{r.v}</div>
+                  </div>
                 ))}
               </div>
             </div>
-            <button style={{...T.btnP(),borderRadius:"var(--radius)",fontSize:15,padding:"14px"}} onClick={printSummary}>🖨️ Imprimir resumen</button>
+            <button style={{...T.btnP(),borderRadius:"var(--radius)",padding:"13px"}} onClick={printSummary}>🖨️ Imprimir resumen</button>
           </div>
         </div>
       )}
 
       {/* Backup */}
       {section==="backup"&&(
-        <div style={{padding:"8px 18px"}}>
+        <div style={{padding:"8px 18px 0"}}>
           <div style={{...T.card,marginBottom:10}}>
             <div style={{fontWeight:700,fontSize:14,marginBottom:6}}>💾 Exportar copia de seguridad</div>
-            <div style={{fontSize:13,color:"var(--tx2)",marginBottom:14}}>Descarga todos tus datos en formato JSON.</div>
+            <div style={{fontSize:13,color:"var(--tx2)",marginBottom:12}}>Descarga todos tus datos en formato JSON.</div>
             <button style={{...T.btnP(P.teal),borderRadius:"var(--radius)",padding:"12px"}} onClick={exportJSON}>Exportar JSON</button>
           </div>
           <div style={{...T.card,marginBottom:10}}>
             <div style={{fontWeight:700,fontSize:14,marginBottom:6}}>📂 Importar copia de seguridad</div>
-            <div style={{fontSize:13,color:"var(--tx2)",marginBottom:14}}>Restaura desde un JSON exportado anteriormente.</div>
+            <div style={{fontSize:13,color:"var(--tx2)",marginBottom:12}}>Restaura desde un JSON anterior.</div>
             <button style={{...T.btnP(P.amber),borderRadius:"var(--radius)",padding:"12px"}} onClick={importJSON}>Importar JSON</button>
           </div>
           <div style={{...T.card,border:`0.5px solid ${P.red}30`}}>
             <div style={{fontWeight:700,fontSize:14,marginBottom:6,color:P.red}}>⚠️ Resetear todos los datos</div>
-            <div style={{fontSize:13,color:"var(--tx2)",marginBottom:14}}>Elimina todo. No se puede deshacer.</div>
+            <div style={{fontSize:13,color:"var(--tx2)",marginBottom:12}}>Elimina todo. No se puede deshacer.</div>
             <button style={{...T.btn(P.red),width:"100%",padding:"12px",fontSize:14}} onClick={()=>setConfirmReset(true)}>Resetear todo</button>
           </div>
         </div>
