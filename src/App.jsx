@@ -819,8 +819,12 @@ function CalendarView({quarters,passGrade}){
   const monthEvents=Object.entries(eventsByDate).filter(([d])=>d.startsWith(`${viewYear}-${padZ(viewMonth+1)}`));
   const totalMonth=monthEvents.reduce((s,[,evs])=>s+evs.length,0);
 
+  // Ancho del grid: se calcula una sola vez y no cambia al seleccionar día
+  const GRID_COLS = "repeat(7,1fr)";
+
   return(
-    <div style={{...T.page,overflowX:"hidden"}}>
+    <div style={{...T.page, overflowX:"hidden", width:"100%"}}>
+
       {/* Header */}
       <div style={{padding:"16px 18px 8px"}}>
         <h1 style={{fontSize:20,fontWeight:700}}>Calendario</h1>
@@ -840,17 +844,19 @@ function CalendarView({quarters,passGrade}){
         </button>
       </div>
 
-      {/* Grid — width fijo para evitar que el panel inferior lo encoja */}
-      <div style={{padding:"0 12px",width:"100%",boxSizing:"border-box"}}>
+      {/* Bloque calendario con tamaño estable — no se ve afectado por el panel de abajo */}
+      <div style={{display:"block",width:"100%",paddingLeft:12,paddingRight:12,boxSizing:"border-box"}}>
         {/* Cabecera días */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",marginBottom:4}}>
+        <div style={{display:"grid",gridTemplateColumns:GRID_COLS,width:"100%",marginBottom:4}}>
           {WDAYS.map(d=>(
             <div key={d} style={{textAlign:"center",fontSize:11,fontWeight:600,color:"var(--tx2)",padding:"4px 0",letterSpacing:"0.05em"}}>{d}</div>
           ))}
         </div>
-        {/* Celdas */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:2}}>
-          {Array.from({length:firstDow}).map((_,i)=><div key={`e${i}`}/>)}
+        {/* Celdas — altura mínima fija para que el grid nunca cambie de tamaño */}
+        <div style={{display:"grid",gridTemplateColumns:GRID_COLS,gap:2,width:"100%"}}>
+          {Array.from({length:firstDow}).map((_,i)=>(
+            <div key={`e${i}`} style={{minHeight:50}}/>
+          ))}
           {Array.from({length:daysInMonth}).map((_,i)=>{
             const d=i+1;
             const ds=dateStr(d);
@@ -860,14 +866,30 @@ function CalendarView({quarters,passGrade}){
             const isPast=new Date(ds)<new Date(todayStr);
             const dots=evs.slice(0,3);
             return(
-              <button key={d} onClick={()=>setSelectedDay(isSel?null:d)}
-                style={{background:isSel?P.purple:isToday?P.purple+"18":"transparent",border:isToday&&!isSel?`1.5px solid ${P.purple}`:"1.5px solid transparent",borderRadius:10,padding:"6px 2px 5px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,minHeight:44,position:"relative",transition:"background .12s"}}>
-                <span style={{fontSize:14,fontWeight:isToday||isSel?700:400,color:isSel?"#fff":isToday?P.purple:isPast?"var(--tx2)":"var(--tx1)",lineHeight:1}}>{d}</span>
-                <div style={{display:"flex",gap:2,justifyContent:"center",height:6}}>
+              <button key={d}
+                onClick={()=>setSelectedDay(isSel?null:d)}
+                style={{
+                  background:isSel?P.purple:isToday?P.purple+"18":"transparent",
+                  border:isToday&&!isSel?`1.5px solid ${P.purple}`:"1.5px solid transparent",
+                  borderRadius:10,
+                  padding:"6px 2px 5px",
+                  cursor:"pointer",
+                  display:"flex",
+                  flexDirection:"column",
+                  alignItems:"center",
+                  justifyContent:"flex-start",
+                  gap:3,
+                  minHeight:50,
+                  width:"100%",
+                  boxSizing:"border-box",
+                  transition:"background .12s",
+                }}>
+                <span style={{fontSize:14,fontWeight:isToday||isSel?700:400,color:isSel?"#fff":isToday?P.purple:isPast?"var(--tx2)":"var(--tx1)",lineHeight:1.2}}>{d}</span>
+                <div style={{display:"flex",gap:2,justifyContent:"center",height:6,flexWrap:"nowrap"}}>
                   {dots.map((ev,j)=>(
-                    <div key={j} style={{width:5,height:5,borderRadius:"50%",background:isSel?"rgba(255,255,255,0.8)":ev.typeColor}}/>
+                    <div key={j} style={{width:5,height:5,borderRadius:"50%",flexShrink:0,background:isSel?"rgba(255,255,255,0.8)":ev.typeColor}}/>
                   ))}
-                  {evs.length>3&&<div style={{width:5,height:5,borderRadius:"50%",background:"var(--tx2)",opacity:0.5}}/>}
+                  {evs.length>3&&<div style={{width:5,height:5,borderRadius:"50%",flexShrink:0,background:"var(--tx2)",opacity:0.5}}/>}
                 </div>
               </button>
             );
@@ -875,9 +897,12 @@ function CalendarView({quarters,passGrade}){
         </div>
       </div>
 
-      {/* Panel del día seleccionado */}
-      {selectedDay&&(
-        <div style={{margin:"16px 18px 0"}}>
+      {/* Separador */}
+      <div style={{height:1,background:"var(--bd)",margin:"16px 18px 0"}}/>
+
+      {/* Panel del día seleccionado — completamente fuera del grid */}
+      {selectedDay?(
+        <div style={{padding:"14px 18px 0"}}>
           <div style={{fontSize:13,fontWeight:700,color:"var(--tx2)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>
             {WDAYS[(new Date(viewYear,viewMonth,selectedDay).getDay()+6)%7]} · {selectedDay} {MONTHS[viewMonth]}
           </div>
@@ -893,7 +918,7 @@ function CalendarView({quarters,passGrade}){
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:12,fontWeight:700,color:ev.subColor,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.subName}</div>
-                      <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>{ev.evalName}</div>
+                      <div style={{fontSize:14,fontWeight:600,marginBottom:6}}>{ev.evalName}</div>
                       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                         <span style={T.tag(ev.typeColor)}>{ev.type}</span>
                         <span style={T.tag(P.gray)}>{ev.pct}%</span>
@@ -904,7 +929,7 @@ function CalendarView({quarters,passGrade}){
                       {ev.days===0?<div style={{fontSize:13,fontWeight:700,color:P.red}}>¡Hoy!</div>
                       :ev.days>0?<div style={{fontSize:13,fontWeight:700,color:uc}}>en {ev.days}d</div>
                       :<div style={{fontSize:12,color:"var(--tx2)"}}>hace {Math.abs(ev.days)}d</div>}
-                      {ev.grade===""&&ev.days>0&&<div style={{fontSize:11,color:"var(--tx2)",marginTop:3}}>Pendiente</div>}
+                      {ev.grade===""&&ev.days!==null&&ev.days>0&&<div style={{fontSize:11,color:"var(--tx2)",marginTop:3}}>Pendiente</div>}
                     </div>
                   </div>
                 </div>
@@ -912,51 +937,52 @@ function CalendarView({quarters,passGrade}){
             })
           )}
         </div>
-      )}
-
-      {/* Lista próximos eventos si no hay día seleccionado */}
-      {!selectedDay&&(()=>{
-        const upcoming=Object.entries(eventsByDate)
-          .flatMap(([date,evs])=>evs.map(ev=>({...ev,date})))
-          .filter(ev=>ev.days!==null&&ev.days>=0)
-          .sort((a,b)=>a.days-b.days)
-          .slice(0,5);
-        if(upcoming.length===0) return(
-          <div style={{textAlign:"center",padding:"40px 20px"}}>
-            <div style={{fontSize:40,marginBottom:10}}>📅</div>
-            <div style={{fontWeight:700,marginBottom:6}}>Sin eventos próximos</div>
-            <div style={{fontSize:13,color:"var(--tx2)"}}>Añade fechas en las evaluaciones de cada asignatura</div>
-          </div>
-        );
-        return(
-          <>
-            <div style={T.sec}>Próximos eventos</div>
-            <div style={{padding:"0 18px"}}>
-              {upcoming.map((ev,i)=>(
-                <div key={i} style={{...T.card,display:"flex",alignItems:"center",gap:12,padding:"12px 14px",marginBottom:8,cursor:"pointer"}}
-                  onClick={()=>{
-                    const evDate=new Date(ev.date);
-                    setViewYear(evDate.getFullYear());
-                    setViewMonth(evDate.getMonth());
-                    setSelectedDay(evDate.getDate());
-                  }}>
-                  <div style={{width:40,height:40,borderRadius:10,background:ev.typeColor+"18",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <div style={{fontSize:9,fontWeight:700,color:ev.typeColor,textTransform:"uppercase",letterSpacing:"0.05em"}}>{MONTHS[new Date(ev.date).getMonth()].slice(0,3)}</div>
-                    <div style={{fontSize:16,fontWeight:700,color:ev.typeColor,lineHeight:1}}>{new Date(ev.date).getDate()}</div>
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.subName}</div>
-                    <div style={{fontSize:12,color:"var(--tx2)",marginTop:2}}>{ev.evalName} · {ev.type}</div>
-                  </div>
-                  <div style={{textAlign:"right",flexShrink:0}}>
-                    <div style={{fontSize:14,fontWeight:700,color:urgencyColor(ev.days)}}>{ev.days===0?"Hoy":`${ev.days}d`}</div>
-                  </div>
-                </div>
-              ))}
+      ):(
+        /* Lista próximos eventos cuando no hay día seleccionado */
+        (()=>{
+          const upcoming=Object.entries(eventsByDate)
+            .flatMap(([date,evs])=>evs.map(ev=>({...ev,date})))
+            .filter(ev=>ev.days!==null&&ev.days>=0)
+            .sort((a,b)=>a.days-b.days)
+            .slice(0,5);
+          if(upcoming.length===0) return(
+            <div style={{textAlign:"center",padding:"40px 20px"}}>
+              <div style={{fontSize:40,marginBottom:10}}>📅</div>
+              <div style={{fontWeight:700,marginBottom:6}}>Sin eventos próximos</div>
+              <div style={{fontSize:13,color:"var(--tx2)"}}>Añade fechas en las evaluaciones de cada asignatura</div>
             </div>
-          </>
-        );
-      })()}
+          );
+          return(
+            <>
+              <div style={T.sec}>Próximos eventos</div>
+              <div style={{padding:"0 18px"}}>
+                {upcoming.map((ev,i)=>(
+                  <div key={i}
+                    style={{...T.card,display:"flex",alignItems:"center",gap:12,padding:"12px 14px",marginBottom:8,cursor:"pointer"}}
+                    onClick={()=>{
+                      const evDate=new Date(ev.date);
+                      setViewYear(evDate.getFullYear());
+                      setViewMonth(evDate.getMonth());
+                      setSelectedDay(evDate.getDate());
+                    }}>
+                    <div style={{width:40,height:40,borderRadius:10,background:ev.typeColor+"18",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <div style={{fontSize:9,fontWeight:700,color:ev.typeColor,textTransform:"uppercase",letterSpacing:"0.05em"}}>{MONTHS[new Date(ev.date).getMonth()].slice(0,3)}</div>
+                      <div style={{fontSize:16,fontWeight:700,color:ev.typeColor,lineHeight:1}}>{new Date(ev.date).getDate()}</div>
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.subName}</div>
+                      <div style={{fontSize:12,color:"var(--tx2)",marginTop:2}}>{ev.evalName} · {ev.type}</div>
+                    </div>
+                    <div style={{flexShrink:0}}>
+                      <div style={{fontSize:14,fontWeight:700,color:urgencyColor(ev.days)}}>{ev.days===0?"Hoy":`${ev.days}d`}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          );
+        })()
+      )}
     </div>
   );
 }
